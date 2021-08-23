@@ -1,0 +1,44 @@
+version: '2.1'
+services:
+  # alertmanager
+  alertmanager:
+    image: bitnami/alertmanager:latest
+    volumes:
+      - ./prometheus-2.28.1.linux-amd64/alertmanager-0.5.1.linux-amd64/alertmanager.yml:/opt/bitnami/alertmanager/conf/prometheus.yml:ro
+    ports:
+      - '9093:9093'
+
+  # thanos query
+  thanos-query:
+    image: bitnami/thanos:latest
+    networks:
+      - thanos-network
+    ports:
+      - '9091:9091'
+    command:
+      - query
+      - --grpc-address=0.0.0.0:10901
+      - --http-address=0.0.0.0:9091
+      # - --query.replica-label=monitor03
+      - --store=211.252.85.242:40030 # monitor01 sidecar port forwarding
+      - --store=211.252.85.242:45030 # monitor02 sidecar port forwarding
+      - --store=211.252.85.242:47030 # monitor03 sidecar port forwarding
+  # thanos ruler
+  thanos-ruler:
+    image: quay.io/thanos/thanos:v0.11.0
+    volumes:
+      - ./alert.rules_m.yml:/data/alert.rules.yml:ro
+    networks:
+      - thanos-network
+    command:
+      - rule
+      - --data-dir=data/
+      - --rule-file=/data/alert.rules.yml
+      - --alert.query-url=http://211.252.85.242:55010
+      - --alertmanagers.url=http://211.252.85.242:55005
+      - --query=211.252.85.242:55010
+      - --eval-interval=10s
+
+networks:
+  thanos-network:
+    driver: bridge
